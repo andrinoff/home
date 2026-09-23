@@ -78,42 +78,56 @@ else
   echo "==> Step 2: no token — the stock Caddy is fine (local CA)"
 fi
 
-echo "==> Step 3: Write token env + render Caddyfile"
+echo "==> Step 3: Render Caddyfile (token stored in the file, never in env)"
 mkdir -p "$CONF_DIR"
 if [[ $USE_LOCAL_CA -eq 0 ]]; then
-  # token must reach the caddy process even on service restarts
-  mkdir -p "/etc/systemd/system/caddy.service.d"
-  (umask 177; printf 'CF_DNS_API_TOKEN=%s\n' "$CF_TOKEN" > "$CONF_DIR/env")
-  printf '[Service]\nEnvironmentFile=%s/env\n' "$CONF_DIR" > "/etc/systemd/system/caddy.service.d/env.conf"
-  systemctl daemon-reload
-  TLS_BLOCK='tls {
-        dns cloudflare {env.CF_DNS_API_TOKEN}
-    }'
+  # IMPORTANT: the token goes into the Caddyfile (kept at mode 0640, root:caddy),
+  # NOT into the process environment — Caddy prints its environment at startup,
+  # which would write the token into the systemd journal.
+  TLS_BLOCK=$'tls {\n\t\tdns cloudflare '"$CF_TOKEN"$'\n\t}'
 else
-  TLS_BLOCK='tls internal'
+  TLS_BLOCK=$'tls internal'
 fi
+
+# Clean up any token left there by earlier versions of this script.
+rm -f "$CONF_DIR/env" "/etc/systemd/system/caddy.service.d/env.conf"
+rmdir "/etc/systemd/system/caddy.service.d" 2>/dev/null || true
+systemctl daemon-reload
 
 cat > "$CONF_DIR/Caddyfile" <<EOF
 $DOMAIN {
-    $TLS_BLOCK
+	$TLS_BLOCK
 
-    encode zstd gzip
+	encode zstd gzip
 
-    handle_errors {
-        @404 {
-            path /api/*
-        }
-        respond @404 \`{"error":"not found"}\` 404
-    }
+	handle_errors {
+		@404 {
+			path /api/*
+		}
+		respond @404 \`{"error":"not found"}\` 404
+	}
 
-    reverse_proxy $APP_TARGET
+	reverse_proxy $APP_TARGET
 }
 EOF
+chown root:caddy "$CONF_DIR/Caddyfile"
+chmod 0640 "$CONF_DIR/Caddyfile"
 unset CF_TOKEN
 
 echo "==> Step 4: Start Caddy"
 systemctl daemon-reload
 systemctl enable caddy >/dev/null 2>&1 || true
+
+# Fail fast instead of letting Caddy die on "address already in use".
+if ss -lnt 2>/dev/null | grep -q ':443 ' && ! systemctl is-active --quiet caddy; then
+  echo "error: something is already listening on port 443." >&2
+  if command -v tailscale >/dev/null 2>&1; then
+    echo "  If you used 'tailscale serve' earlier, disable it (Caddy takes over HTTPS):" >&2
+    echo "    sudo tailscale serve off" >&2
+  fi
+  echo "  Find the culprit with:  ss -lntp 'sport = :443'" >&2
+  exit 1
+fi
 systemctl restart caddy
 
 sleep 1

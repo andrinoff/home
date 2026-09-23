@@ -174,8 +174,11 @@ for it). What it does underneath:
    above. (If they are missing and Go is present, it builds one with `xcaddy`
    instead.)
 4. **API token** — create a Cloudflare token scoped to `Zone:DNS:Edit` and pass
-   it in. Caddy writes it to `/etc/caddy/env` (guarded by a systemd drop-in) and
-   requests the certificate for `home.andrinoff.com`.
+   it in. It is written into `/etc/caddy/Caddyfile` as `dns cloudflare <token>`
+   (file kept at mode 0640, root:caddy). It is deliberately **not** passed as an
+   environment variable: Caddy prints its environment at startup, which would
+   copy the token into the systemd journal. Caddy then requests the certificate
+   for `home.andrinoff.com`.
 5. **Visit** `https://home.andrinoff.com` from any tailnet device — trusted
    cert, green lock, no per-device setup.
 
@@ -197,6 +200,10 @@ caddy cert list                       # obtained certificates
 ```
 
 Notes:
+- **Port 443 conflict**: if you previously ran `tailscale serve`, it holds
+  443 — disable it first (`sudo tailscale serve off`); Caddy takes over HTTPS.
+- **Token hygiene**: if a token ever ends up in `journalctl -u caddy` output,
+  treat it as compromised and rotate it at Cloudflare immediately.
 - `apt upgrade` can overwrite `/usr/bin/caddy` with a stock build and drop the
   Cloudflare module, which breaks cert renewal. Either `sudo apt-mark hold
   caddy`, or just re-run `sudo ./deploy/setup-domain.sh home.andrinoff.com`
