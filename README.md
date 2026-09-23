@@ -163,22 +163,23 @@ sudo ./deploy/setup-domain.sh home.andrinoff.com
 The script picks up `CF_DNS_API_TOKEN` from the environment if set (or prompts
 for it). What it does underneath:
 
-1. **DNS** — add in Cloudflare:
-   - Type `A`, name `home`, value = **your server's Tailscale IP**
-     (`tailscale ip -4`), proxy **OFF** (grey cloud).
-   - A Tailscale IP is only routable inside your tailnet, so this does **not**
-     publish the site to the internet.
+1. **DNS A record** — created/updated automatically through the Cloudflare API:
+   `A home → <your server's Tailscale IP>`, proxy **OFF** (grey cloud). A
+   Tailscale IP is only routable inside your tailnet, so this does **not**
+   publish the site to the internet. (Manual fallback: add the record yourself;
+   the script prints what it needs.)
 2. **Install Caddy** from the official repo (`apt install caddy`, for the
    systemd unit + config dir).
 3. **Swap in the Cloudflare-capable Caddy** from the `deploy/dist` binaries
    above. (If they are missing and Go is present, it builds one with `xcaddy`
    instead.)
-4. **API token** — create a Cloudflare token scoped to `Zone:DNS:Edit` and pass
-   it in. It is written into `/etc/caddy/Caddyfile` as `dns cloudflare <token>`
-   (file kept at mode 0640, root:caddy). It is deliberately **not** passed as an
-   environment variable: Caddy prints its environment at startup, which would
-   copy the token into the systemd journal. Caddy then requests the certificate
-   for `home.andrinoff.com`.
+4. **API token** — create a Cloudflare token scoped to `Zone:DNS:Edit` **and
+   `Zone:Zone:Read`** and pass it in. (The `Zone:Read` permission lets the
+   script resolve your zone ID automatically; if you omit it, set `CF_ZONE_ID`
+   or add the A record manually.) The token is written into `/etc/caddy/Caddyfile`
+   as `dns cloudflare <token>` — the file is kept at mode 0640, root:caddy. It
+   is deliberately **not** an environment variable: Caddy prints its environment
+   at startup, which would copy the token into the systemd journal.
 5. **Visit** `https://home.andrinoff.com` from any tailnet device — trusted
    cert, green lock, no per-device setup.
 
@@ -200,6 +201,11 @@ caddy cert list                       # obtained certificates
 ```
 
 Notes:
+- **Only an `A` record should persist** in your dashboard once the script runs.
+  The DNS-01 cert challenge uses a short-lived `_acme-challenge` TXT record that
+  Cloudflare deletes right after validation — it intentionally never shows up.
+  If there is no `A home` record either, the script could not reach the API
+  (token lacks `Zone:Read`, or `CF_ZONE_ID` was needed).
 - **Port 443 conflict**: if you previously ran `tailscale serve`, it holds
   443 — disable it first (`sudo tailscale serve off`); Caddy takes over HTTPS.
 - **Token hygiene**: if a token ever ends up in `journalctl -u caddy` output,

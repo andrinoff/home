@@ -31,7 +31,63 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Step 0: DNS A record (do this once in your DNS provider)"
+# --- Cloudflare API helpers ------------------------------------------------
+cf_api() {  # cf_api <METHOD> <PATH> [JSON BODY]
+  local method="$1" path="$2" body="${3:-}"
+  if [[ -n "$body" ]]; then
+    curl -sS -X "$method" "https://api.cloudflare.com/client/v4$path" \
+      -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "$body"
+  else
+    curl -sS -X "$method" "https://api.cloudflare.com/client/v4$path" \
+      -H "Authorization: Bearer $CF_TOKEN"
+  fi
+}
+
+json_first_id() {      # first 32-hex "id" in a Cloudflare JSON response
+  grep -o "\"id\":\"[0-9a-f]\{32\}\"" | head -n1 | cut -d'"' -f4
+}
+json_first_content() { # first "content" value in a Cloudflare JSON response
+  grep -o '"content":"[^"]*"' | head -n1 | cut -d'"' -f4
+}
+
+ensure_dns_a_record() {  # ensure_dns_a_record <tailnet ip>
+  local ip="$1"
+  local zone="${CF_ZONE_NAME:-${DOMAIN#*.}}"  # home.andrinoff.com -> andrinoff.com
+  local zone_id="${CF_ZONE_ID:-}"
+
+  if [[ -z "$ip" ]]; then
+    echo "     warning: no Tailscale IPv4 found on this machine; cannot auto-create the A record." >&2
+    echo "     Add it manually: Type A | Name ${DOMAIN%%.*} | <tailscale ip> | Proxy OFF" >&2
+    return 0
+  fi
+
+  if [[ -z "$zone_id" ]]; then
+    zone_id="$(cf_api GET "/zones?name=$zone&per_page=1" | json_first_id || true)"
+  fi
+  if [[ -z "$zone_id" ]]; then
+    echo "     warning: could not look up zone '$zone' (token may lack Zone:Read)." >&2
+    echo "     Re-run with CF_ZONE_ID=<id> (on the zone overview page), or add the A record manually." >&2
+    return 0
+  fi
+
+  local payload="{\"type\":\"A\",\"name\":\"$DOMAIN\",\"content\":\"$ip\",\"proxied\":false,\"ttl\":1}"
+  local existing rec_id cur_content
+  existing="$(cf_api GET "/zones/$zone_id/dns_records?type=A&name=$DOMAIN" || true)"
+  rec_id="$(printf '%s' "$existing" | json_first_id || true)"
+  cur_content="$(printf '%s' "$existing" | json_first_content || true)"
+
+  if [[ -z "$rec_id" ]]; then
+    cf_api POST "/zones/$zone_id/dns_records" "$payload" >/dev/null
+    echo "     created A record: $DOMAIN -> $ip (proxied off)"
+  elif [[ "$cur_content" != "$ip" ]]; then
+    cf_api PUT "/zones/$zone_id/dns_records/$rec_id" "$payload" >/dev/null
+    echo "     updated A record: $DOMAIN -> $ip"
+  else
+    echo "     A record already points at $ip"
+  fi
+}
+
+echo "==> Step 0: DNS A record"
 TS_IP="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
 echo "     Type: A | Name: ${DOMAIN%%.*} | Content: ${TS_IP:-<Tailscale IP of this server>} | Proxy: OFF (grey cloud)"
 echo "     (A Tailscale IP also routes only inside your tailnet, so the site stays private.)"
@@ -76,6 +132,11 @@ if [[ -n "$CF_TOKEN" ]]; then
 else
   USE_LOCAL_CA=1
   echo "==> Step 2: no token — the stock Caddy is fine (local CA)"
+fi
+
+if [[ $USE_LOCAL_CA -eq 0 ]]; then
+  echo "==> Step 2.5: Create/update the DNS A record via the Cloudflare API"
+  ensure_dns_a_record "$TS_IP"
 fi
 
 echo "==> Step 3: Render Caddyfile (token stored in the file, never in env)"
