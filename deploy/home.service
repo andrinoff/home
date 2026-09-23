@@ -1,0 +1,26 @@
+[Unit]
+Description=Home manager
+Documentation=file:/opt/home/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=home
+Group=home
+WorkingDirectory=/opt/home
+# Bind to loopback only; a reverse proxy (tailscale serve / Caddy) fronts it.
+ExecStart=/opt/home/home -addr 127.0.0.1:8080 -data /var/lib/home
+Restart=always
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/home
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

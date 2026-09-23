@@ -1,0 +1,15 @@
+# Backend runtime (built binary)
+home
+data/
+web/node_modules/
+
+# Vite build output, except the placeholder that keeps go:embed compiling
+web/dist/*
+!web/dist/.gitkeep
+
+# Editor / OS
+.DS_Store
+.idea/
+*.db
+*.db-wal
+*.db-shm

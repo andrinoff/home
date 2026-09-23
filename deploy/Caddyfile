@@ -1,0 +1,31 @@
+# Home manager — optional Caddy config for serving on a custom domain over
+# Tailscale (no public IP needed).
+#
+#   * Point an A record "home" at your server's Tailscale IP (100.x.y.z) in
+#     your DNS provider (grey-cloud / proxy OFF). Tailscale IPs are only
+#     routable from inside your tailnet, so this does NOT expose the site.
+#   * `tls internal` uses Caddy's local CA. Trust it once per device so the
+#     browser shows a green lock:
+#         sudo cat /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+#       then add that cert as a trusted root on the phone/laptop.
+#   * If you'd rather have a real, publicly-trusted cert, build Caddy with the
+#     caddy-dns/cloudflare module and add:
+#         tls {
+#           dns cloudflare <api_token>
+#         }
+#
+# For a truly zero-config setup (recommended), skip Caddy entirely and use
+# `tailscale serve` with the .ts.net hostname — see the README "Deployment".
+home.andrinoff.com {
+	tls internal
+	encode zstd gzip
+
+	handle_errors {
+		@404 {
+			path /api/*
+		}
+		respond @404 `{"error":"not found"}` 404
+	}
+
+	reverse_proxy 127.0.0.1:8080
+}
