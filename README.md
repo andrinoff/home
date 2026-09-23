@@ -132,57 +132,69 @@ tailscale serve reset    # clear all serve config
 
 ---
 
-## 3. Optional: use your own domain (`home.andrinoff.com`)
+## 3. Use your own domain (`home.andrinoff.com`)
 
-Tailscale's built-in serving only supports its `.ts.net` names. To use your
-own domain **while staying tailnet-only**, run a reverse proxy on the server and
-point the domain at the server's Tailscale IP. Caddy is included in `deploy/`.
+Tailscale's built-in serving only supports `.ts.net` names. To use your own
+domain **while staying tailnet-only**, Caddy (run on the server) fronts the app
+and issues a real Let's Encrypt certificate via Cloudflare's **DNS-01**
+challenge — so no public IP and no open ports are needed.
 
-1. **DNS**: in your DNS provider, add
-   - Type `A`, name `home` (→ `home.andrinoff.com`), value = **your server's
-     Tailscale IP** (the `100.x.y.z` from `tailscale ip -4`), proxy **off**
-     (grey cloud).
-   - Tailscale IPs are only routable from inside your tailnet, so this does
-     **not** publish the site to the internet.
+### Prepare a Cloudflare-capable Caddy (do this on your Mac, once)
 
-2. **Install Caddy** (official repo):
+```bash
+make caddy-dist    # builds deploy/dist/caddy-linux-{amd64,arm64} locally
+```
 
-   ```bash
-   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-   sudo apt update && sudo apt install caddy
-   ```
+These are the Caddy builtin + `caddy-dns/cloudflare` compiled for Ubuntu, so
+the server **does not need Go or xcaddy**. Copy them to the server next to
+`deploy/`:
 
-3. **Configure**: copy `deploy/Caddyfile` to `/etc/caddy/Caddyfile` (edit the
-   domain) and reload:
+```bash
+scp -r deploy/dist user@server:/path/to/home/deploy/
+```
 
-   ```bash
-   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-   sudo systemctl reload caddy
-   ```
+### Run the setup on the server
 
-4. **Trust the local CA once per device** so the browser shows a green lock
-   (Caddy uses `tls internal`, i.e. its own private CA):
+```bash
+# on the server, from the repo
+sudo ./deploy/setup-domain.sh home.andrinoff.com
+```
 
-   ```bash
-   # on the server, print the root cert
-   sudo cat /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-   ```
+The script picks up `CF_DNS_API_TOKEN` from the environment if set (or prompts
+for it). What it does underneath:
 
-   Add that certificate as a **trusted root** on each device that will browse
-   the site. (Alternative for a real public cert without this step: build
-   Caddy with the `caddy-dns/cloudflare` plugin and use `tls { dns cloudflare
-   <token> }` — see comments in the Caddyfile.)
+1. **DNS** — add in Cloudflare:
+   - Type `A`, name `home`, value = **your server's Tailscale IP**
+     (`tailscale ip -4`), proxy **OFF** (grey cloud).
+   - A Tailscale IP is only routable inside your tailnet, so this does **not**
+     publish the site to the internet.
+2. **Install Caddy** from the official repo (`apt install caddy`, for the
+   systemd unit + config dir).
+3. **Swap in the Cloudflare-capable Caddy** from the `deploy/dist` binaries
+   above. (If they are missing and Go is present, it builds one with `xcaddy`
+   instead.)
+4. **API token** — create a Cloudflare token scoped to `Zone:DNS:Edit` and pass
+   it in. Caddy writes it to `/etc/caddy/env` (guarded by a systemd drop-in) and
+   requests the certificate for `home.andrinoff.com`.
+5. **Visit** `https://home.andrinoff.com` from any tailnet device — trusted
+   cert, green lock, no per-device setup.
 
-5. Visit `https://home.andrinoff.com` from a device connected to your tailnet.
+### Fallback: no token → local CA
+If you skip the token, the script uses `tls internal` (Caddy's own private CA).
+The site works the same way, but each device must trust Caddy's root cert once:
 
-### Which to pick?
+```bash
+sudo cat /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+```
 
-- **`.ts.net` + `tailscale serve`**: zero configuration, real cert, recommend
-  for most people.
-- **Custom domain + Caddy**: nicer name, but requires the one-time CA-trust
-  step on each device (or a plugin build for a public cert).
+Add that certificate as a trusted root on each phone/laptop.
+
+### Troubleshooting
+```bash
+journalctl -u caddy -e --no-pager     # caddy errors
+caddy cert list                       # obtained certificates
+# make sure the A record value equals the Tailscale IP AND proxy is OFF
+```
 
 ## API summary
 

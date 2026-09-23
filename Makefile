@@ -28,6 +28,13 @@ install: clean
 clean:
 	rm -f $(BINARY)
 
+## Build caddy+cloudflare binaries for serving a custom domain over Tailscale.
+caddy-dist:
+	cd deploy/caddy-build && go mod tidy
+	cd deploy/caddy-build && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../dist/caddy-linux-amd64 .
+	cd deploy/caddy-build && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../dist/caddy-linux-arm64 .
+	@echo "built deploy/dist/ — scp these to the server next to deploy/ and run setup-domain.sh"
+
 fmt:
 	cd web && npx tsc --noEmit
 	gofmt -w ./cmd ./internal ./web/embed.go

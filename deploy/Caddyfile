@@ -1,23 +1,26 @@
-# Home manager — optional Caddy config for serving on a custom domain over
-# Tailscale (no public IP needed).
+# Home manager — Caddy config to serve home.andrinoff.com over Tailscale
+# (no public IP, no open ports) with a REAL, publicly-trusted cert.
 #
-#   * Point an A record "home" at your server's Tailscale IP (100.x.y.z) in
-#     your DNS provider (grey-cloud / proxy OFF). Tailscale IPs are only
-#     routable from inside your tailnet, so this does NOT expose the site.
-#   * `tls internal` uses Caddy's local CA. Trust it once per device so the
-#     browser shows a green lock:
-#         sudo cat /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-#       then add that cert as a trusted root on the phone/laptop.
-#   * If you'd rather have a real, publicly-trusted cert, build Caddy with the
-#     caddy-dns/cloudflare module and add:
-#         tls {
-#           dns cloudflare <api_token>
-#         }
+# How it works:
+#   1. DNS:  A record "home" -> your server's Tailscale IP (100.x.y.z),
+#            proxy OFF (grey cloud). Tailscale IPs are only routable from
+#            inside your tailnet, so the site is NOT exposed to the internet.
+#   2. TLS:  Caddy issues a Let's Encrypt cert via Cloudflare's DNS-01
+#            challenge (creates a TXT record), so it needs no inbound
+#            port 80/443. The token only needs Zone:DNS:Edit permissions.
 #
-# For a truly zero-config setup (recommended), skip Caddy entirely and use
-# `tailscale serve` with the .ts.net hostname — see the README "Deployment".
+# The token is read from the CF_DNS_API_TOKEN environment variable. Set it in
+# the caddy service (see setup-domain.sh) — do not hardcode secrets in files
+# you commit.
+#
+# To run this:  sudo CF_DNS_API_TOKEN=<token> ./deploy/setup-domain.sh
+# If no token is available, setup-domain.sh falls back to a local CA
+# (tls internal) which requires trusting the CA once per device.
 home.andrinoff.com {
-	tls internal
+	tls {
+		dns cloudflare {env.CF_DNS_API_TOKEN}
+	}
+
 	encode zstd gzip
 
 	handle_errors {
