@@ -1,5 +1,6 @@
-# Backend runtime (built binary)
-home
+# Backend runtime (built binary at repo root). Root-anchored so that cmd/home
+# and internal/... are never ignored.
+/home
 data/
 web/node_modules/
 
