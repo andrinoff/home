@@ -196,6 +196,15 @@ caddy cert list                       # obtained certificates
 # make sure the A record value equals the Tailscale IP AND proxy is OFF
 ```
 
+Notes:
+- `apt upgrade` can overwrite `/usr/bin/caddy` with a stock build and drop the
+  Cloudflare module, which breaks cert renewal. Either `sudo apt-mark hold
+  caddy`, or just re-run `sudo ./deploy/setup-domain.sh home.andrinoff.com`
+  after upgrading.
+- Prefer the prebuilt binaries (`make caddy-dist` → copy `deploy/dist` to the
+  server): then the server never needs Go and the setup is fast. The on-server
+  `xcaddy` build is only a fallback.
+
 ## API summary
 
 ```

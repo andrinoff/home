@@ -65,7 +65,8 @@ if [[ -n "$CF_TOKEN" ]]; then
       [[ -x "$(go env GOPATH)/bin/xcaddy" ]] || go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
       export PATH="$(go env GOPATH)/bin:$PATH"
       VER="$(caddy version | awk '{print $1}')"
-      xcaddy build "${VER}" --with github.com/caddy-dns/cloudflare -o /usr/bin/caddy
+      # note: xcaddy uses --output (no -o shorthand)
+      xcaddy build "${VER}" --with github.com/caddy-dns/cloudflare --output /usr/bin/caddy
     else
       echo "error: Go not installed, and no prebuilt Caddy here." >&2
       echo "  Either build one on your Mac:  make caddy-dist && scp <that> deploy/dist/caddy-linux-$ARCH_SHORT  [to the server]" >&2
