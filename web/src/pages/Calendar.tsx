@@ -119,7 +119,7 @@ export function CalendarPage() {
           </div>
         </div>
 
-        <div className="cal-grid">
+        <div className="cal-grid" key={`${cursor.getFullYear()}-${cursor.getMonth()}`}>
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
             <div key={d} className="cal-dow">
               {d}
@@ -168,7 +168,7 @@ export function CalendarPage() {
                   <span className="task-due">
                     <Clock size={13} /> {timeOf(e.startsAt)}
                     {e.endsAt ? ` – ${timeOf(e.endsAt)}` : ''}
-                    {e.location ? ` · ${e.location}` : ''}
+                    {e.location ? `, ${e.location}` : ''}
                   </span>
                 </div>
                 <div className="row-actions">

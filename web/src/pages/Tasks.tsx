@@ -110,15 +110,15 @@ export function TasksPage() {
         </button>
       </form>
 
-      <div className="segmented" role="tablist">
-        <button className={filter === 'open' ? 'active' : ''} onClick={() => setFilter('open')}>
-          Open · {openCount}
+      <div className="segmented" role="group" aria-label="Filter tasks">
+        <button aria-pressed={filter === 'open'} className={filter === 'open' ? 'active' : ''} onClick={() => setFilter('open')}>
+          Open <span className="seg-count">{openCount}</span>
         </button>
-        <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-          All · {tasks.length}
+        <button aria-pressed={filter === 'all'} className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
+          All <span className="seg-count">{tasks.length}</span>
         </button>
-        <button className={filter === 'done' ? 'active' : ''} onClick={() => setFilter('done')}>
-          Done · {doneCount}
+        <button aria-pressed={filter === 'done'} className={filter === 'done' ? 'active' : ''} onClick={() => setFilter('done')}>
+          Done <span className="seg-count">{doneCount}</span>
         </button>
       </div>
 
@@ -141,7 +141,7 @@ export function TasksPage() {
               const overdue = !t.done && t.dueDate && t.dueDate < tk
               const dueToday = !t.done && t.dueDate === tk
               return (
-                <li key={t.id} className={`list-row ${t.done ? 'checked-row' : ''}`}>
+                <li key={t.id} className={`list-row ${t.done ? 'checked-row' : ''} ${overdue ? 'overdue' : ''}`}>
                   <input
                     type="checkbox"
                     className="checkbox"

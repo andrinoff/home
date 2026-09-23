@@ -7,41 +7,54 @@ import { CalendarClock, Cart, CheckSquare, ChevronRight, Clock } from '../compon
 
 export function DashboardPage() {
   const [dash, setDash] = useState<Dashboard | null>(null)
+  const [now, setNow] = useState(() => new Date())
 
   const load = () => {
     api.dashboard().then(setDash)
   }
   useEffect(load, [])
 
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 15000)
+    return () => clearInterval(timer)
+  }, [])
+
   const toggleTask = (id: number) => api.tasks.toggle(id).then(load)
   const toggleItem = (id: number) => api.grocery.toggleItem(id).then(load)
 
   if (!dash) return <div className="loading">Loading…</div>
 
-  const today = new Date()
   const tk = todayKey()
 
   const dueLabel = (due: string) => {
     if (!due) return 'no due date'
-    if (due < tk) return `overdue · ${formatDayKey(due)}`
+    if (due < tk) return `overdue, ${formatDayKey(due)}`
     if (due === tk) return 'due today'
     return formatDayKey(due)
   }
-  const dueClass = (due: string) => (due && due <= tk ? 'due-overdue' : '')
+  const isOverdue = (due: string) => Boolean(due) && due < tk
+  const dueClass = (due: string) => (isOverdue(due) ? 'overdue-text' : due === tk ? 'due-today-text' : '')
 
   const eventDate = (iso: string) => {
     const d = new Date(iso)
     const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    return `${date} · ${time}`
+    return `${date} at ${time}`
   }
 
   return (
     <div className="stack">
-      <h1 className="page-title">Overview</h1>
-      <p className="day-heading">
-        {today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-      </p>
+      <header className="planner">
+        <div>
+          <h1 className="planner-weekday">{now.toLocaleDateString(undefined, { weekday: 'long' })}</h1>
+          <div className="planner-date">
+            {now.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+        <div className="planner-clock">
+          {now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+        </div>
+      </header>
 
       <section className="card">
         <div className="card-head">
@@ -58,7 +71,7 @@ export function DashboardPage() {
         ) : (
           <ul className="list">
             {dash.tasks.map((t) => (
-              <li key={t.id} className="list-row">
+              <li key={t.id} className={`list-row ${isOverdue(t.dueDate) ? 'overdue' : ''}`}>
                 <input
                   type="checkbox"
                   className="checkbox"

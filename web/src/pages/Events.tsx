@@ -111,7 +111,7 @@ export function EventsPage() {
                     <span className="task-title">{e.title}</span>
                     <span className="task-due">
                       <Clock size={13} /> {formatDateTime(e.startsAt)}
-                      {e.location ? ` · ${e.location}` : ''}
+                      {e.location ? `, ${e.location}` : ''}
                     </span>
                     {e.description && <span className="muted event-desc">{e.description}</span>}
                   </div>
